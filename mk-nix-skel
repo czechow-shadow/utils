@@ -1,0 +1,111 @@
+#!/bin/bash
+
+set -eu -o pipefail
+
+# Give me a directory
+# Possibly ghc?
+
+usage() {
+  echo "Usage: `basename $0` dest_dir ghc_version";
+}
+
+if [ $# != 2 ]; then
+  usage;
+  exit 1;
+fi
+
+DEST_DIR="$1";
+GHC_VER="$2";
+
+GEN_FILES=(shell.nix release.nix project.nix nixpkgs.nix nixpgks.json)
+
+for i in ${GEN_FILES[@]} "$DEST_DIR"; do
+  f="$DEST_DIR/$i";
+  if [ -e "$f" ]; then
+    echo "$f already exists"; 
+    exit 2;
+  fi
+done
+
+# Check if in nix is already loaded:
+if [ -z "${NIX_STORE:-}" ]; then
+  source ~/.nix-profile/etc/profile.d/nix.sh
+fi
+
+# run cabal stuff
+mk-cabal-skel "$@"
+
+( cd $DEST_DIR && cabal2nix . > project.nix )
+
+# mkdir
+mkdir -p "$DEST_DIR";
+
+cat > "$DEST_DIR/release.nix" <<EOF
+{ compiler ? "$GHC_VER" }:
+let
+  config = {
+    packageOverrides = pkgs: rec {
+      haskell = pkgs.haskell // {
+        packages = pkgs.haskell.packages // {
+          "\${compiler}" = pkgs.haskell.packages."\${compiler}".override {
+            overrides = haskellPackagesNew: haskellPackagesOld: rec {
+
+              project = haskellPackagesNew.callPackage ./project.nix { };
+
+              # Sample override
+              # x509 = haskellPackagesNew.callPackage ~/work/nix-experim/x509-1.7.5 { };
+            };
+          };
+        };
+      };
+    };
+  };
+
+  pkgs = import ./nixpkgs.nix { inherit config; };
+
+in
+  { project = pkgs.haskell.packages.\${compiler}.project;
+  }
+EOF
+
+cat > "$DEST_DIR/shell.nix" <<EOF
+{ nixpkgs ? import <nixpkgs> {} }:
+let
+  inherit (nixpkgs) pkgs;
+  inherit (pkgs) haskellPackages;
+
+  project = (import ./release.nix {}).project ;
+in pkgs.stdenv.mkDerivation {
+  name = "shell";
+  buildInputs = project.env.nativeBuildInputs ++ [
+    haskellPackages.ghcid
+    haskellPackages.cabal-install
+  ];
+}
+EOF
+
+cat >"$DEST_DIR/nixpkgs.nix" <<EOF
+{ config }:
+let
+  bootstrap = import <nixpkgs> { };
+
+  nixpkgs = builtins.fromJSON (builtins.readFile ./nixpkgs.json);
+
+  src = bootstrap.fetchFromGitHub {
+    owner = "NixOS";
+    repo  = "nixpkgs";
+    inherit (nixpkgs) rev sha256;
+  };
+in
+  import src { inherit config; } 
+EOF
+
+cat >"$DEST_DIR/nixpkgs.json" <<EOF
+{
+  "url": "https://github.com/NixOS/nixpkgs.git",
+  "rev": "2436c27541b2f52deea3a4c1691216a02152e729",
+  "date": "2019-09-25T08:02:27+02:00",
+  "sha256": "0p98dwy3rbvdp6np596sfqnwlra11pif3rbdh02pwdyjmdvkmbvd",
+  "fetchSubmodules": false
+}
+EOF

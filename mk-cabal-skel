@@ -1,0 +1,138 @@
+#!/bin/bash
+
+set -eu -o pipefail
+
+usage() {
+  echo "Usage: `basename $0` name";
+}
+
+if [ $# != 1 ]; then
+  usage;
+  exit 1;
+fi
+
+NAME="$1";
+DEST_DIR=`pwd`/$NAME;
+
+GEN_FILES=($NAME.cabal Setup.hs)
+
+for i in ${GEN_FILES[@]} "$DEST_DIR"; do
+  f="$DEST_DIR/$i";
+  if [ -e "$f" ]; then
+    echo "$f already exists"; 
+    exit 2;
+  fi
+done
+
+mkdir -p "$DEST_DIR";
+
+cat > "$DEST_DIR/$NAME.cabal" <<EOF
+name:                $NAME
+version:             0.1.0.0
+-- synopsis:
+-- description:
+license:             BSD3
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  ghc-options:         -Wall
+  exposed-modules:     Lib
+  build-depends:       base >= 4.7 && < 5
+                     , protolude
+                     , text
+                     , containers
+  default-language:    Haskell2010
+  default-extensions:  NoImplicitPrelude
+                     , OverloadedStrings
+                     , ScopedTypeVariables
+                     , DuplicateRecordFields
+                     , LambdaCase
+                     , TupleSections
+                     , NamedFieldPuns
+                     , FlexibleInstances
+                     , MultiParamTypeClasses
+                     , TypeApplications
+                     , FlexibleContexts
+
+executable $NAME
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , protolude
+                     , $NAME
+  default-language:    Haskell2010
+  default-extensions:  NoImplicitPrelude
+                     , OverloadedStrings
+                     , ScopedTypeVariables
+                     , DuplicateRecordFields
+                     , LambdaCase
+                     , TupleSections
+                     , NamedFieldPuns
+                     , FlexibleInstances
+                     , MultiParamTypeClasses
+                     , TypeApplications
+                     , FlexibleContexts
+
+test-suite $NAME-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , $NAME
+                     , protolude
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+  default-extensions:  NoImplicitPrelude
+                     , OverloadedStrings
+                     , ScopedTypeVariables
+                     , DuplicateRecordFields
+                     , LambdaCase
+                     , TupleSections
+                     , NamedFieldPuns
+                     , FlexibleInstances
+                     , MultiParamTypeClasses
+                     , TypeApplications
+                     , FlexibleContexts
+EOF
+
+cat > "$DEST_DIR/Setup.hs" <<EOF
+import Distribution.Simple
+main = defaultMain
+EOF
+
+mkdir -p "$DEST_DIR/test"
+cat > "$DEST_DIR/test/Spec.hs" <<EOF
+import Protolude
+
+main :: IO ()
+main = putText "Test suite not yet implemented"
+EOF
+
+mkdir -p "$DEST_DIR/src"
+cat > "$DEST_DIR/src/Lib.hs" <<EOF
+module Lib where
+EOF
+
+mkdir -p "$DEST_DIR/app"
+cat > "$DEST_DIR/app/Main.hs" <<EOF
+module Main where
+
+import Protolude
+
+main :: IO ()
+main = putText "Up and running"
+EOF
+
+touch "$DEST_DIR/.projectile"
+
+cat > "$DEST_DIR/.dir-locals.el" <<EOF
+;;; Directory Local Variables
+;;; For more information see (info "(emacs) Directory Variables")
+
+((haskell-mode
+  (projectile-tags-command . "find src app -type f | grep hs$ | xargs hasktags -e")))
+EOF
