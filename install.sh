@@ -25,6 +25,7 @@ for i in ${FILES[@]}; do
   	echo "$f already exists";
 	if [ -n "$FORCE" ]; then
   	  echo "Removing $f";
+	  rm "$f";
 	else
   	  echo "Aborted";
 	  exit 2;
@@ -33,3 +34,5 @@ for i in ${FILES[@]}; do
 
   ( cd $DEST_DIR && ln -s "$fh" "$i" )
 done
+
+echo "Installed ${FILES[@]} in $DEST_DIR";
